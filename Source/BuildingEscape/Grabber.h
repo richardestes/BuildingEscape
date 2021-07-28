@@ -27,14 +27,22 @@ protected:
 private:
 	float Reach = 100.f;
 	
+	UPROPERTY()
 	UPhysicsHandleComponent* PhysicsHandle = nullptr;
+	UPROPERTY()
 	UInputComponent* InputComponent = nullptr;
 	
 	void Grab();
 	void Release();
 	void FindPhysicsHandle();
 	void SetupInputComponent();
-	void DebugViewRaycast(FVector PlayerViewPointLocation, FRotator PlayerViewPointRotation, FVector LineTraceEnd);
+	
 	// Return the first Actor within reach with physics body
 	FHitResult GetFirstPhysicsBodyInReach() const;
+	
+	// Return the LineTraceEnd
+	FVector GetPlayersReach() const;
+	
+	// Get Players Position in World
+	FVector GetPlayersPosition() const;
 };

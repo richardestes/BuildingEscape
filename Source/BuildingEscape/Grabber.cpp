@@ -28,11 +28,7 @@ void UGrabber::BeginPlay()
 void UGrabber::FindPhysicsHandle()
 {
 	PhysicsHandle = GetOwner()->FindComponentByClass<UPhysicsHandleComponent>();
-	if (PhysicsHandle)
-	{
-		// Physics is found
-	}
-	else
+	if (!PhysicsHandle)
 	{
 		UE_LOG(LogTemp,Error,TEXT("%s has no PhysicsHandle Component."), *GetOwner()->GetName());
 	}
@@ -53,9 +49,32 @@ void UGrabber::SetupInputComponent()
 }
 
 void UGrabber::Grab()
-{
-	UE_LOG(LogTemp, Warning, TEXT("Grabber Pressed"));
+{	
+	FHitResult HitResult = GetFirstPhysicsBodyInReach();
+	UPrimitiveComponent* ComponentToGrab = HitResult.GetComponent();
+	AActor* ActorHit = HitResult.GetActor();
 	
+	// If we hit something then attach physics handle.
+	if (ActorHit)
+	{
+		if (!PhysicsHandle){return;}
+		PhysicsHandle->GrabComponentAtLocation
+		(
+			ComponentToGrab,
+			NAME_None,
+			GetPlayersReach()
+		);
+	}
+}
+
+void UGrabber::Release()
+{
+	if (!PhysicsHandle){return;}
+	PhysicsHandle->ReleaseComponent();
+}
+
+FVector UGrabber::GetPlayersReach() const
+{
 	// Get players viewpoint
 	FVector PlayerViewPointLocation;
 	FRotator PlayerViewPointRotation;
@@ -65,52 +84,12 @@ void UGrabber::Grab()
 		OUT PlayerViewPointLocation, //OUT does nothing, just meant to mark out params
 		OUT PlayerViewPointRotation
 	);
-	
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-	
-	FHitResult HitResult = GetFirstPhysicsBodyInReach();
-	UPrimitiveComponent* ComponentToGrab = HitResult.GetComponent();
-	// If we hit something then attach physics handle.
-	if (HitResult.GetActor())
-	{
-		PhysicsHandle->GrabComponentAtLocation
-		(
-			ComponentToGrab,
-			NAME_None,
-			LineTraceEnd
-		);
-	}
-}
-
-void UGrabber::Release()
-{
-	UE_LOG(LogTemp, Warning, TEXT("Grabber Released"));
-	PhysicsHandle->ReleaseComponent();
-}
-
-// Draw a line from player showing Reach
-void UGrabber::DebugViewRaycast(FVector Location, FRotator Rotation, FVector LineTraceEnd)
-{
-	
-	DrawDebugLine(
-		GetWorld(),
-		Location,
-		LineTraceEnd,
-		FColor(0,230,0),
-		false,
-		0.f,
-		0,
-		5.f	
-	);
+	return PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
 }
 
 
-// Called every frame
-void UGrabber::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+FVector UGrabber::GetPlayersPosition() const
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	
-	// Get players viewpoint
 	FVector PlayerViewPointLocation;
 	FRotator PlayerViewPointRotation;
 	
@@ -119,50 +98,37 @@ void UGrabber::TickComponent(float DeltaTime, ELevelTick TickType, FActorCompone
 		OUT PlayerViewPointRotation
 	);
 	
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-	
-	// If the physics handle is attached
-	if (PhysicsHandle->GrabbedComponent)
-	{		
-		// Move the object we are holding.
-		PhysicsHandle->SetTargetLocation(LineTraceEnd);
-	}
-		
+	return PlayerViewPointLocation;
 }
 
 FHitResult UGrabber::GetFirstPhysicsBodyInReach() const
-{
-	// Get players viewpoint
-	FVector PlayerViewPointLocation;
-	FRotator PlayerViewPointRotation;
-	
-	GetWorld()->GetFirstPlayerController()->GetPlayerViewPoint(
-		OUT PlayerViewPointLocation, //OUT does nothing, just meant to mark out params
-		OUT PlayerViewPointRotation
-	);
-	
-	FVector LineTraceEnd = PlayerViewPointLocation + PlayerViewPointRotation.Vector() * Reach;
-	
-	// DebugViewRaycast(PlayerViewPointLocation, PlayerViewPointRotation, LineTraceEnd);
-	
+{	
 	// Ray-cast out to a certain distance (Reach)
 	FHitResult Hit;
 	FCollisionQueryParams TraceParams(FName(TEXT("")),false, GetOwner());
 	
 	GetWorld()->LineTraceSingleByObjectType(
 		OUT Hit,
-		PlayerViewPointLocation,
-		LineTraceEnd,
+		GetPlayersPosition(),
+		GetPlayersReach(),
 		FCollisionObjectQueryParams(ECollisionChannel::ECC_PhysicsBody),
 		TraceParams
 	);
-		
-	// See what it hits 
-	AActor* ActorHit = Hit.GetActor();
-	if (ActorHit)
-	{
-		UE_LOG(LogTemp,Warning, TEXT("Line trace has hit: %s"), *(ActorHit)->GetName());
-	}
 	
 	return Hit;
 }
+
+// Called every frame
+void UGrabber::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	
+	if (!PhysicsHandle){return;}
+	// If the physics handle is attached
+	if (PhysicsHandle->GrabbedComponent)
+	{		
+		// Move the object we are holding.
+		PhysicsHandle->SetTargetLocation(GetPlayersReach());
+	}
+}
+
